@@ -1,0 +1,75 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  SERVICE_NAME: corporate-finance-autopilot
+  REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run/${{ env.SERVICE_NAME }}:latest \
+            ./backend
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run/${{ env.SERVICE_NAME }}:latest
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/cloud-run/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          flags: |
+            --memory=2Gi
+            --cpu=2
+            --min-instances=0
+            --max-instances=3
+            --timeout=300
+            --allow-unauthenticated
+          env_vars: |
+            DEBUG=false
+            CACHE_DIR=/tmp/cache
+          secrets: |
+            TOGETHER_API_KEY=TOGETHER_API_KEY:latest
+            FRED_API_KEY=FRED_API_KEY:latest
+            DATABASE_URL=DATABASE_URL:latest
+            LOGO_DEV_TOKEN=LOGO_DEV_TOKEN:latest
+            FMP_API_KEY=FMP_API_KEY:latest
+
+      - name: Show deployed URL
+        run: |
+          echo "Deployed to: ${{ steps.deploy.outputs.url || 'check Cloud Run console' }}"

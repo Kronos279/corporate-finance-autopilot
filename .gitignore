@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Environment
+.env
+
+# Cache
+data/cache/
+
+# Temp scripts
+_*.py
+_*.sh
+
+# Docs (internal)
+*.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Extra ignores for robustness
+backend/.DS_Store
+backend/.dockerignore
+*.log
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/

@@ -1,0 +1,58 @@
+# Google Cloud Build — alternative to GitHub Actions
+# Trigger: connect this repo in Cloud Build console or use:
+#   gcloud builds submit --config cloudbuild.yaml ./backend
+
+substitutions:
+  _SERVICE_NAME: corporate-finance-autopilot
+  _REGION: us-central1
+
+steps:
+  # Build the Docker image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run/${_SERVICE_NAME}:${COMMIT_SHA}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run/${_SERVICE_NAME}:latest"
+      - "./backend"
+
+  # Push to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "--all-tags"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run/${_SERVICE_NAME}"
+
+  # Deploy to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "${_SERVICE_NAME}"
+      - "--image"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run/${_SERVICE_NAME}:${COMMIT_SHA}"
+      - "--region"
+      - "${_REGION}"
+      - "--platform"
+      - "managed"
+      - "--memory"
+      - "2Gi"
+      - "--cpu"
+      - "2"
+      - "--min-instances"
+      - "0"
+      - "--max-instances"
+      - "3"
+      - "--timeout"
+      - "300"
+      - "--allow-unauthenticated"
+      - "--set-env-vars"
+      - "DEBUG=false,CACHE_DIR=/tmp/cache"
+      - "--set-secrets"
+      - "TOGETHER_API_KEY=TOGETHER_API_KEY:latest,FRED_API_KEY=FRED_API_KEY:latest,DATABASE_URL=DATABASE_URL:latest,LOGO_DEV_TOKEN=LOGO_DEV_TOKEN:latest"
+
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run/${_SERVICE_NAME}:${COMMIT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run/${_SERVICE_NAME}:latest"
